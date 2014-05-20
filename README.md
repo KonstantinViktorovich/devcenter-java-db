@@ -1,213 +1,250 @@
-Connecting to Relational Databases on Heroku with Java
-======================================================
-------------------------------------------------------
-++++++++++++++++++++++++++++++++++++++++++++++++++++++
-Applications on Heroku can use a variety of relational database services including the [Postgres database](http://devcenter.heroku.com/articles/heroku-postgres-documentation) offered by Heroku and [MySQL](http://devcenter.heroku.com/articles/amazon_rds) offered by AWS. Databases are provisioned using the add-on system. Some applications will have a small, free postgres database provisioned by default. You can check this by running
+<img src="https://www.codeship.io/projects/4d736200-be0b-0131-9044-46bf180c8b06/status" >
+
+
+This quickstart will get you going with Java and the [Jetty](http://eclipse.org/jetty/) embedded web server, deployed to Heroku.
+
+{.note}
+Sample code for the [Java demo application](https://github.com/heroku/devcenter-java) is available on GitHub. Edits and enhancements are welcome.
+
+## Prerequisites
+
+* Basic Java knowledge, including an installed version of the JVM and [Maven 3](http://maven.apache.org/download.html).
+* Your application must run on the [OpenJDK](http://openjdk.java.net/) version 6, or 7 (8 is also available in beta).
+* A Heroku user account.  [Signup is free and instant.](https://api.heroku.com/signup/devcenter)
+
+## Local workstation setup
+
+Install the [Heroku Toolbelt](https://toolbelt.herokuapp.com/) on your local workstation.  This ensures that you have access to the [Heroku command-line client](http://devcenter.heroku.com/categories/command-line), Foreman, and the Git revision control system.
+
+Once installed, you can use the `heroku` command from your command shell.  Log in using the email address and password you used when creating your Heroku account:
 
     :::term
-    $ heroku info
-    === sparkling-wine-2003
-    Web URL:        http://sparkling-wine-2003.herokuapp.com/
-    Git Repo:       git@heroku.com:sparkling-wine-2003.git
-    Repo size:      21M
-    Slug size:      916k
-    Stack:          cedar
-    Data size:      (empty)
-    Addons:         Shared Database 5MB
-    Owner:          jesper@heroku.com
+    $ heroku login
+    Enter your Heroku credentials.
+    Email: adam@example.com
+    Password: 
+    Could not find an existing public key.
+    Would you like to generate one? [Yn] 
+    Generating new SSH public key.
+    Uploading ssh public key /Users/adam/.ssh/id_rsa.pub
 
-and look for the "Shared Database 5MB" under Addons. It depends on the buildpack whether a database is provisioned automatically. You can provision the shared database manually with
+Press enter at the prompt to upload your existing `ssh` key or create a new one, used for pushing code later on.
 
-    $ heroku addons:add shared-database:5mb
+## Write your app
     
-The shared database is meant for testing purposes. For a production application you must use one of the production quality SQL database services:
+You can run any Java application on Heroku that uses Maven as build tool. As an example, we will write a web app using Jetty. Here is a basic servlet class that also contains a main method to start up the application:
 
-* [Heroku PostgresQL](http://devcenter.heroku.com/articles/heroku-postgres-documentation)
-* [Amazon RDS](http://devcenter.heroku.com/articles/amazon_rds)
-
-Once you have provisioned a relational database to your application. The application reads the database connection information from the `DATABASE_URL` config variable. It is formatted like this:
-
-    [database type]://[username]:[password]@[host]/[database name]
-
-For instance:
-
-    postgres://foo:foo@heroku.com/hellodb
-
-You can see the `DATABASE_URL` provided to an application by running:
-
-    :::term
-    $ heroku config
-    DATABASE_URL            => postgres://foo:foo@heroku.com/hellodb
-
-It is not recommended to copy this value into a static file since the environment may change the value.  Instead an application should read the `DATABASE_URL` environment variable and setup the database connections based on that information.
-
-Using the `DATABASE_URL` in a Play! Framework App
--------------------------------------------------
-
-Play! Framework supports the `DATABASE_URL` environment variable out-of-the box. The built-in ORM framework will automatically use this variable if it is present, so there is no need for any additional configuration.
-
-
-Using the `DATABASE_URL` in plain JDBC
-------------------------------------
-
-To instantiate a JDBC connection in your code, you can use a method like this:
+### src/main/java/HelloWorld.java
 
     :::java
-    private static Connection getConnection() throws URISyntaxException, SQLException {
-        URI dbUri = new URI(System.getenv("DATABASE_URL"));
+    import java.io.IOException;
+    import javax.servlet.ServletException;
+    import javax.servlet.http.*;
+    import org.eclipse.jetty.server.Server;
+    import org.eclipse.jetty.servlet.*;
 
-        String username = dbUri.getUserInfo().split(":")[0];
-        String password = dbUri.getUserInfo().split(":")[1];
-        String dbUrl = "jdbc:postgresql://" + dbUri.getHost() + dbUri.getPath();
+    public class HelloWorld extends HttpServlet {
 
-        return DriverManager.getConnection(dbUrl, username, password);
-    }
+        @Override
+        protected void doGet(HttpServletRequest req, HttpServletResponse resp)
+                throws ServletException, IOException {
+            resp.getWriter().print("Hello from Java!\n");
+        }
 
-
-Using the `DATABASE_URL` in Spring with XML configuration
--------------------------------------------------------
-
-This snippet of Spring XML configuration will setup a `BasicDataSource` from the `DATABASE_URL` and can then be used with Hibernate, JPA, etc:
-
-    :::xml
-    <bean class="java.net.URI" id="dbUrl">
-        <constructor-arg value="#{systemEnvironment['DATABASE_URL']}"/>
-    </bean>
-
-    <bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource">
-        <property name="url" value="#{ 'jdbc:postgresql://' + @dbUrl.getHost() + @dbUrl.getPath() }"/>
-        <property name="username" value="#{ @dbUrl.getUserInfo().split(':')[0] }"/>
-        <property name="password" value="#{ @dbUrl.getUserInfo().split(':')[1] }"/>
-    </bean>
-
-
-Using the `DATABASE_URL` in Spring with Java configuration
---------------------------------------------------------
-
-Alternatively you can use Java for configuration of the `BasicDataSource` in Spring:
-
-    :::java
-    @Configuration
-    public class MainConfig {
-
-        @Bean
-        public BasicDataSource dataSource() throws URISyntaxException {
-            URI dbUri = new URI(System.getenv("DATABASE_URL"));
-
-            String username = dbUri.getUserInfo().split(":")[0];
-            String password = dbUri.getUserInfo().split(":")[1];
-            String dbUrl = "jdbc:postgresql://" + dbUri.getHost() + dbUri.getPath() + ":" + dbUri.getPort() + dbUri.getPath();
-
-            BasicDataSource basicDataSource = new BasicDataSource();
-            basicDataSource.setUrl(dbUrl);
-            basicDataSource.setUsername(username);
-            basicDataSource.setPassword(password);
-
-            return basicDataSource;
+        public static void main(String[] args) throws Exception{
+            Server server = new Server(Integer.valueOf(System.getenv("PORT")));
+            ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+            context.setContextPath("/");
+            server.setHandler(context);
+            context.addServlet(new ServletHolder(new HelloWorld()),"/*");
+            server.start();
+            server.join();   
         }
     }
 
-Connecting to a dedicated database remotely
--------------------------------------------
+## Declare dependencies in `pom.xml`
 
-If you're using a Heroku Postgres dedicated database you can connect to it remotely for maintenance and debugging purposes. However doing so requires that you use an SSL connection. This can be done with JDBC.
+Cedar recognizes Java apps by the existence of a `pom.xml` file. Here's an example `pom.xml` for the Java/Jetty app we created above.
 
-your JDBC connection URL will need to have the following parameters:
+### pom.xml
 
-    jdbc:postgresql://host/database?user=user&password=password&ssl=true&sslfactory=org.postgresql.ssl.NonValidatingFactory
+    :::xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <project xmlns="http://maven.apache.org/POM/4.0.0" 
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+             xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+        <modelVersion>4.0.0</modelVersion>
+        <groupId>com.example</groupId>
+        <version>1.0-SNAPSHOT</version>
+        <artifactId>helloworld</artifactId>
+        <dependencies>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-servlet</artifactId>
+                <version>7.6.0.v20120127</version>
+            </dependency>
+            <dependency>
+                <groupId>javax.servlet</groupId>
+                <artifactId>servlet-api</artifactId>
+                <version>2.5</version>
+            </dependency>
+        </dependencies>
+        <build>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>2.4</version>
+                    <executions>
+                        <execution>
+                            <id>copy-dependencies</id>
+                            <phase>package</phase>
+                            <goals><goal>copy-dependencies</goal></goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </build>
+    </project>
 
-If you leave off ssl=true you will get a connection error. If you leave off sslfactory=org.postgresql.ssl.NonValidatingFactory you may get an error like:
+Prevent build artifacts from going into revision control by creating this file:
 
-    unable to find valid certification path to requested target
-
-Sample project
---------------
-
-A sample project illustrating these three methods of setting up a database connection on Heroku can be found at:
-[https://github.com/heroku/devcenter-java-database](https://github.com/heroku/devcenter-java-database)
-
-To try it out first clone the git repository:
-
-    git clone git://github.com/heroku/devcenter-java-database.git
-
-In the `devcenter-java-database` directory run the Maven build for the project:
-
-    mvn package
-
-If you have a local Postgres database and want to test things locally, first set the `DATABASE_URL` environment variable (using the correct values):
-
-* On Linux/Mac:
-
-        export DATABASE_URL=postgres://foo:foo@localhost/hellodb
-
-* On Windows:
-
-        set DATABASE_URL=postgres://foo:foo@localhost/hellodb
-
-To run the example applications locally, execute the generated start scripts:
-
-* On Linux/Mac:
-
-        sh devcenter-java-database-plain-jdbc/target/bin/main
-        sh devcenter-java-database-spring-xml/target/bin/main
-        sh devcenter-java-database-spring-java/target/bin/main
-
-* On Windows:
-
-        devcenter-java-database-plain-jdbc/target/bin/main.bat
-        devcenter-java-database-spring-xml/target/bin/main.bat
-        devcenter-java-database-spring-java/target/bin/main.bat
-
-For each command you should see a message like the following indicating that everything worked:
-
-    Read from DB: 2011-11-23 11:37:03.886016
-
-To run on Heroku, first create a new application:
+### .gitignore
 
     :::term
-    $ heroku create -s cedar
+    target
+
+## Build and run your app locally
+
+Build your app locally:
+
+    :::term
+    $ mvn package
+
+As part of the build, Maven gathers dependencies and copies them into the directory `target/dependency`. Start you app locally by setting the PORT environment variable and running Java with all dependencies on the classpath:
+
+On Mac & Linux:
+
+    :::term
+    $ export PORT=5000
+    $ java -cp target/classes:"target/dependency/*" HelloWorld
+
+(double quotes needed to prevent expansion of `*`)
+
+On Windows:
+
+    :::term
+    $ set PORT=5000
+    $ java -cp target\classes;"target\dependency\*" HelloWorld
+
+You should now see something similar to:
+
+    :::term
+    2012-01-31 15:51:21.811:INFO:oejs.Server:jetty-7.6.0.v20120127
+    2012-01-31 15:51:21.931:INFO:oejsh.ContextHandler:started o.e.j.s.ServletContextHandler{/,null}
+    2012-01-31 15:51:21.971:INFO:oejs.AbstractConnector:Started SelectChannelConnector@0.0.0.0:5000
+
+Open the app in your browser:  
+[http://localhost:5000](http://localhost:5000)
+
+
+## Declare process types with a Procfile
+
+To run your web process on Heroku, you need to declare what command to use.  We'll use `Procfile` to declare how our web process type is run.
+
+Here's what the `Procfile` looks like:
+
+    :::term
+    web:    java -cp target/classes:target/dependency/* HelloWorld
+
+(note: no double quotes needed in Procfile)
+
+## Optionally Choose a JDK
+By default, OpenJDK 1.6 is installed with your app. However, you can choose to use a newer JDK by specifying `java.runtime.version=1.7` in the `system.properties` file.
+
+Here's what a `system.properties` file looks like:
+
+    :::term
+    java.runtime.version=1.7
+
+You can specify 1.6, 1.7, or 1.8 (1.8 is in beta) for Java 6, 7, or 8 (with lambdas), respectively.
+
+## Store your app in Git
+
+We now have the three major components of our app: build configuration and dependencies in `pom.xml`, process types in `Procfile`, and our application source in `src/main/java/HelloWorld.java`.  Let's put it into Git:
+
+    :::term
+    $ git init
+    $ git add .
+    $ git commit -m "init"
+
+## Deploy to Heroku
+
+Create the app:
+
+    :::term
+    $ heroku create
     Creating stark-sword-398... done, stack is cedar
     http://stark-sword-398.herokuapp.com/ | git@heroku.com:stark-sword-398.git
     Git remote heroku added
 
-Then deploy the application on Heroku:
+Deploy your code:
 
     :::term
     $ git push heroku master
-    Counting objects: 70, done.
-    Delta compression using up to 8 threads.
-    Compressing objects: 100% (21/21), done.
-    Writing objects: 100% (70/70), 8.71 KiB, done.
-    Total 70 (delta 14), reused 70 (delta 14)
-    
+    Counting objects: 47, done.
+    Delta compression using up to 4 threads.
+    Compressing objects: 100% (25/25), done.
+    Writing objects: 100% (47/47), 10.25 KiB, done.
+    Total 47 (delta 19), reused 42 (delta 17)
+
     -----> Heroku receiving push
     -----> Java app detected
-    -----> Installing Maven 3.0.3..... done
-    -----> Installing settings.xml..... done
-    -----> executing /app/tmp/repo.git/.cache/.maven/bin/mvn -B -Duser.home=/tmp/build_2y7ju7daa9t04 -Dmaven.repo.local=/app/tmp/repo.git/.cache/.m2/repository -s /app/tmp/repo.git/.cache/.m2/settings.xml -DskipTests=true clean install
-       [INFO] Scanning for projects...
-       [INFO] ------------------------------------------------------------------------
-       [INFO] Reactor Build Order:
-       [INFO] 
-       [INFO] devcenter-java-database-plain-jdbc
-       [INFO] devcenter-java-database-spring-xml
-       [INFO] devcenter-java-database-spring-java
-       [INFO] devcenter-java-database
-       [INFO]                                                                         
-       [INFO] ------------------------------------------------------------------------
-       [INFO] Building devcenter-java-database-plain-jdbc 1.0-SNAPSHOT
-       [INFO] ------------------------------------------------------------------------
-       Downloading: http://s3pository.heroku.com/jvm/postgresql/postgresql/9.0-801.jdbc4/postgresql-9.0-801.jdbc4.pom
-    ...
+    -----> Installing OpenJDK 1.6... done
+    -----> Installing Maven 3.0.3... done
+    -----> Installing settings.xml... done
+    -----> executing /app/tmp/repo.git/.cache/.maven/bin/mvn -B -Duser.home=/tmp/build_3k0p14ghrmdzs -Dmaven.repo.local=/app/tmp/repo.git/.cache/.m2/repository -s /app/tmp/repo.git/.cache/.m2/settings.xml -DskipTests=true clean install
+           [INFO] Scanning for projects...
+           [INFO]                                                                         
+           [INFO] ------------------------------------------------------------------------
+           [INFO] Building helloworld 1.0-SNAPSHOT
+           [INFO] ------------------------------------------------------------------------
+           ...
+           [INFO] ------------------------------------------------------------------------
+           [INFO] BUILD SUCCESS
+           [INFO] ------------------------------------------------------------------------
+           [INFO] Total time: 10.062s
+           [INFO] Finished at: Tue Jan 31 23:27:20 UTC 2012
+           [INFO] Final Memory: 12M/490M
+           [INFO] ------------------------------------------------------------------------
+    -----> Discovering process types
+           Procfile declares types -> web
+    -----> Compiled slug size is 948K
+    -----> Launching... done, v3
+           http://empty-fire-6534.herokuapp.com deployed to Heroku
 
-Now execute any of the examples on Heroku:
+Now, let's check the state of the app's processes:
 
     :::term
-    $ heroku run "sh devcenter-java-database-plain-jdbc/target/bin/main"
-    Running sh devcenter-java-database-plain-jdbc/target/bin/main attached to terminal... up, run.1
-    Read from DB: 2011-11-29 20:36:25.001468
+    $ heroku ps
+    Process  State       Command                               
+    -------  ----------  ------------------------------------  
+    web.1    up for 10s  java -cp target/classes:target/dep..  
 
-Further Learning
-----------------
+The web process is up.  Review the logs for more information:
 
-[Learn about the shared and dedicated database options](http://devcenter.heroku.com/articles/database)
+    :::term
+    $ heroku logs
+    ...
+    2012-01-31T23:27:27+00:00 heroku[web.1]: Starting process with command `java -cp target/classes:target/dependency/* HelloWorld`
+    2012-01-31T23:27:28+00:00 app[web.1]: 2012-01-31 23:27:28.280:INFO:oejs.Server:jetty-7.6.0.v20120127
+    2012-01-31T23:27:28+00:00 app[web.1]: 2012-01-31 23:27:28.334:INFO:oejsh.ContextHandler:started o.e.j.s.ServletContextHandler{/,null}
+    2012-01-31T23:27:28+00:00 app[web.1]: 2012-01-31 23:27:28.373:INFO:oejs.AbstractConnector:Started SelectChannelConnector@0.0.0.0:8236
+    2012-01-31T23:27:29+00:00 heroku[web.1]: State changed from starting to up
+    2012-01-31T23:27:32+00:00 heroku[router]: GET empty-fire-6534.herokuapp.com/ dyno=web.1 queue=0 wait=0ms service=27ms status=200 bytes=17
+
+Looks good. We can now visit the app with `heroku open`.
+
+## Next steps: database-driven apps
+
+The [Spring MVC Hibernate tutorial](http://devcenter.heroku.com/articles/spring-mvc-hibernate) will guide you through setting up a database-driven application on Heroku.
