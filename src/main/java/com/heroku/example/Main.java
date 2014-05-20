@@ -16,61 +16,20 @@ import java.sql.*;
 public class Main extends HttpServlet{
 	static Connection connection;
 	
-	    @Override
+    @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
-	    Statement stmt = null;
-	    ResultSet rs;
-		try {
-			stmt = connection.createStatement();
-			rs = stmt.executeQuery("SELECT tick FROM ticks");
-			rs.next();
-			while (rs.next()) {
-				resp.getWriter().println("Read from DB: " + rs.getTimestamp("tick"));
-			}
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
+        resp.getWriter().print("Hello from Java!\n");
     }
 
-    public static void main(String[] args) throws Exception {
-        
-    	Class.forName("org.postgresql.Driver");
-    	connection = getConnection();
-        
-        Statement stmt = connection.createStatement();
-        //stmt.executeUpdate("DROP TABLE IF EXISTS ticks");
-        //stmt.executeUpdate("CREATE TABLE ticks (tick timestamp)");
-        stmt.executeUpdate("INSERT INTO ticks VALUES (now())");
-        /*
-        ResultSet rs = stmt.executeQuery("SELECT tick FROM ticks");
-        
-        while (rs.next()) {
-            System.out.println("Read from DB: " + rs.getTimestamp("tick"));
-        }
-		*/
-        
-		Server server = new Server(Integer.valueOf(System.getenv("PORT")));
+    public static void main(String[] args) throws Exception{
+        Server server = new Server(Integer.valueOf(System.getenv("PORT")));
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         context.setContextPath("/");
         server.setHandler(context);
         context.addServlet(new ServletHolder(new Main()),"/*");
         server.start();
-        server.join(); 
-		
-    }
-    
-    private static Connection getConnection() throws URISyntaxException, SQLException {
-        URI dbUri = new URI(System.getenv("DATABASE_URL"));
-
-        String username = dbUri.getUserInfo().split(":")[0];
-        String password = dbUri.getUserInfo().split(":")[1];
-        String dbUrl = "jdbc:postgresql://" + dbUri.getHost() + dbUri.getPath()+"";
-    	/*
-    	String dbUrl = "jdbc:postgresql://127.0.0.1:5432/testdb";
-    	String username = "postgres";
-    	String password = "www";*/
-        return DriverManager.getConnection(dbUrl, username, password);
+        server.join();   
     }
 
 }
