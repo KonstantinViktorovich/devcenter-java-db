@@ -1,6 +1,7 @@
 Connecting to Relational Databases on Heroku with Java
 ======================================================
 ------------------------------------------------------
+++++++++++++++++++++++++++++++++++++++++++++++++++++++
 Applications on Heroku can use a variety of relational database services including the [Postgres database](http://devcenter.heroku.com/articles/heroku-postgres-documentation) offered by Heroku and [MySQL](http://devcenter.heroku.com/articles/amazon_rds) offered by AWS. Databases are provisioned using the add-on system. Some applications will have a small, free postgres database provisioned by default. You can check this by running
 
     :::term
